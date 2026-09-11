@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScrollScrub — Cinematic Scroll Experiences</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #f5f5f5;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ===== HEADER / NAV ===== */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      padding: 1.2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(10, 10, 10, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.3s ease;
+    }
+
+    .logo {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff 0%, #888 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    nav ul {
+      display: flex;
+      gap: 2.5rem;
+      list-style: none;
+    }
+
+    nav a {
+      color: #ccc;
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s ease;
+      position: relative;
+    }
+
+    nav a:hover { color: #fff; }
+
+    nav a::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: #fff;
+      transition: width 0.3s ease;
+    }
+
+    nav a:hover::after { width: 100%; }
+
+    .nav-cta {
+      padding: 0.55rem 1.4rem;
+      background: #fff;
+      color: #000 !important;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .nav-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 25px rgba(255, 255, 255, 0.15);
+    }
+
+    .nav-cta::after { display: none; }
+
+    /* ===== HERO SECTION ===== */
+    .hero {
+      position: relative;
+      height: 600vh; /* tall enough for smooth scrubbing */
+    }
+
+    .hero-sticky {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      width: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #frame-img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    /* Text overlays that fade in/out based on scroll progress */
+    .hero-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .overlay-text {
+      position: absolute;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      max-width: 800px;
+      padding: 0 2rem;
+    }
+
+    .overlay-text.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .overlay-text h1 {
+      font-size: clamp(2.5rem, 6vw, 5rem);
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1.1;
+      margin-bottom: 1rem;
+      background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.7) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .overlay-text h2 {
+      font-size: clamp(2rem, 4.5vw, 3.8rem);
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+      color: #fff;
+    }
+
+    .overlay-text p {
+      font-size: clamp(1rem, 1.8vw, 1.3rem);
+      color: rgba(255, 255, 255, 0.75);
+      font-weight: 400;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .overlay-text .tag {
+      display: inline-block;
+      padding: 0.4rem 1rem;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #fff;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+
+    /* Progress bar at bottom of hero */
+    .scroll-progress {
+      position: absolute;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .scroll-progress span {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .progress-bar {
+      width: 120px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #fff;
+      border-radius: 2px;
+      transition: width 0.1s ease;
+    }
+
+    /* Status text (shown while loading) */
+    .status-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.7);
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      color: #aaa;
+      z-index: 5;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* ===== SAMPLE SECTIONS ===== */
+    .section {
+      padding: 8rem 3rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      display: inline-block;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: #666;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+    }
+
+    .section h2 {
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1.2;
+      margin-bottom: 1.5rem;
+      color: #fff;
+    }
+
+    .section p {
+      font-size: 1.15rem;
+      color: #999;
+      max-width: 650px;
+      line-height: 1.7;
+    }
+
+    /* Features grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-top: 4rem;
+    }
+
+    .feature-card {
+      padding: 2.5rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 20px;
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .feature-card h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: #fff;
+    }
+
+    .feature-card p {
+      font-size: 0.95rem;
+      color: #888;
+      line-height: 1.6;
+    }
+
+    /* CTA Section */
+    .cta-section {
+      text-align: center;
+      padding: 10rem 3rem;
+      position: relative;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-section h2 {
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      margin-bottom: 1.5rem;
+    }
+
+    .cta-section p {
+      font-size: 1.2rem;
+      color: #888;
+      margin: 0 auto 3rem;
+      max-width: 500px;
+    }
+
+    .cta-btn {
+      display: inline-block;
+      padding: 1rem 2.5rem;
+      background: #fff;
+      color: #000;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 1rem;
+      border-radius: 50px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .cta-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(255, 255, 255, 0.2);
+    }
+
+    /* Footer */
+    footer {
+      padding: 3rem;
+      text-align: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      color: #555;
+      font-size: 0.9rem;
+    }
+
+    footer a {
+      color: #888;
+      text-decoration: none;
+      margin: 0 1rem;
+    }
+
+    footer a:hover { color: #fff; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header { padding: 1rem 1.5rem; }
+      nav ul { gap: 1.2rem; }
+      .section { padding: 5rem 1.5rem; }
+      .cta-section { padding: 6rem 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header>
+    <div class="logo">ScrollScrub</div>
+    <nav>
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="/upload.html">Upload</a></li>
+        <li><a href="#cta" class="nav-cta">Get Started</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <!-- ===== HERO (Scroll-Scrubbing Video) ===== -->
+  <section class="hero" id="hero">
+    <div class="hero-sticky">
+      <img id="frame-img" src="" alt="">
+
+      <!-- Text overlays — each visible during a different scroll range -->
+      <div class="hero-overlay">
+        <div class="overlay-text" id="overlay-1">
+          <div class="tag">✦ Cinematic Scroll</div>
+          <h1>Scroll to Experience</h1>
+          <p>Every frame tells a story. Scroll down and watch the video come alive beneath your cursor.</p>
+        </div>
+
+        <div class="overlay-text" id="overlay-2">
+          <h2>Frame by Frame</h2>
+          <p>Precision-crafted transitions. Each mouse movement reveals a new moment, frozen in time.</p>
+        </div>
+
+        <div class="overlay-text" id="overlay-3">
+          <h2>Built for Impact</h2>
+          <p>Turn any video into an interactive, scroll-driven experience that captivates your audience.</p>
+        </div>
+
+        <div class="overlay-text" id="overlay-4">
+          <h2>Ready to Launch</h2>
+          <p>Upload your own video and create your own scroll-scrubbing masterpiece.</p>
+        </div>
+      </div>
+
+      <!-- Scroll progress indicator -->
+      <div class="scroll-progress">
+        <span>Scroll</span>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+
+      <div class="status-text" id="status">Loading frames…</div>
+    </div>
+  </section>
+
+  <!-- ===== FEATURES SECTION ===== -->
+  <section class="section" id="features">
+    <span class="section-label">Features</span>
+    <h2>Everything you need to<br>create scroll magic.</h2>
+    <p>Simple tools, powerful results. No complex frameworks required.</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🎬</div>
+        <h3>Video to Frames</h3>
+        <p>Upload any video format. Our server extracts every frame with ffmpeg at your chosen resolution and framerate.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🖱️</div>
+        <h3>Scroll-Driven</h3>
+        <p>Map scroll position directly to video frames. Smooth, responsive, and works on every device.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Preloaded & Fast</h3>
+        <p>All frames are preloaded into memory for buttery-smooth 60fps playback with zero lag.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎨</div>
+        <h3>Text Overlays</h3>
+        <p>Add animated text that fades in and out as you scroll, creating cinematic storytelling experiences.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📱</div>
+        <h3>Fully Responsive</h3>
+        <p>Works beautifully on desktop and mobile. Touch scrolling maps perfectly to frame scrubbing.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔧</div>
+        <h3>Zero Dependencies</h3>
+        <p>Pure HTML, CSS, and JavaScript. No React, no GSAP, no heavy libraries. Just clean code.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ABOUT SECTION ===== -->
+  <section class="section" id="about">
+    <span class="section-label">About</span>
+    <h2>The art of scroll-driven storytelling.</h2>
+    <p>
+      Inspired by the cinematic product pages of Apple, Tesla, and other industry leaders,
+      ScrollScrub turns ordinary videos into immersive, scroll-driven experiences. 
+      Every pixel of movement reveals a new frame, giving your audience complete control
+      over the narrative pace.
+    </p>
+    <br><br>
+    <p>
+      Built with Node.js, Express, and ffmpeg — it's lightweight, fast, and entirely self-hosted.
+      Drop in your video, and the server handles the rest.
+    </p>
+  </section>
+
+  <!-- ===== CTA SECTION ===== -->
+  <section class="cta-section" id="cta">
+    <h2>Start building today.</h2>
+    <p>Upload your first video and create a scroll experience your visitors won't forget.</p>
+    <a href="/upload.html" class="cta-btn">Upload a Video →</a>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer>
+    <p>
+      <a href="#">Documentation</a>
+      <a href="#">GitHub</a>
+      <a href="#">Contact</a>
+    </p>
+    <br>
+    <p>© 2026 ScrollScrub. Built with Node.js & ffmpeg.</p>
+  </footer>
+
+  <!-- ===== SCRIPT ===== -->
+  <script>
+    const hero = document.getElementById('hero');
+    const img = document.getElementById('frame-img');
+    const statusEl = document.getElementById('status');
+    const progressFill = document.getElementById('progress-fill');
+
+    // Overlay elements and their visibility ranges (0.0 - 1.0)
+    const overlays = [
+      { el: document.getElementById('overlay-1'), start: 0.00, end: 0.22 },
+      { el: document.getElementById('overlay-2'), start: 0.25, end: 0.47 },
+      { el: document.getElementById('overlay-3'), start: 0.50, end: 0.72 },
+      { el: document.getElementById('overlay-4'), start: 0.75, end: 0.97 },
+    ];
+
+    let frameCount = 0;
+    let isLoaded = false;
+    let imageCache = [];
+    let currentFrameIndex = 0;
+    let targetFrameIndex = 0;
+    let isScrolling = false;
+
+    // 1. Fetch manifest and preload all frames
+    fetch('/api/frame-count')
+      .then(res => res.json())
+      .then(data => {
+        frameCount = data.count;
+        if (frameCount > 0) {
+          statusEl.textContent = `Preloading ${frameCount} frames…`;
+
+          let loadedCount = 0;
+          for (let i = 0; i < frameCount; i++) {
+            const frameNum = String(i + 1).padStart(4, '0');
+            const imgObj = new Image();
+            imgObj.src = `/frames/frame_${frameNum}.jpg`;
+
+            imgObj.onload = () => {
+              loadedCount++;
+              statusEl.textContent = `Preloading… ${Math.round((loadedCount / frameCount) * 100)}%`;
+
+              if (loadedCount === frameCount) {
+                isLoaded = true;
+                statusEl.style.display = 'none';
+                img.style.display = 'block';
+                img.src = imageCache[0].src;
+                updateOverlays(0); // Show first overlay
+              }
+            };
+            imageCache.push(imgObj);
+          }
+        } else {
+          statusEl.textContent = 'No frames found. Upload a video to begin.';
+        }
+      })
+      .catch(err => {
+        statusEl.textContent = 'Error loading frames.';
+        console.error(err);
+      });
+
+    // 2. Scroll event — calculate progress and target frame
+    window.addEventListener('scroll', () => {
+      if (!isLoaded) return;
+
+      const rect = hero.getBoundingClientRect();
+      const heroHeight = hero.offsetHeight;
+      const viewportHeight = window.innerHeight;
+      const scrolled = -rect.top;
+      const scrollableDistance = heroHeight - viewportHeight;
+
+      if (scrollableDistance <= 0) return;
+
+      let progress = scrolled / scrollableDistance;
+      progress = Math.max(0, Math.min(1, progress));
+
+      // Update progress bar
+      progressFill.style.width = `${progress * 100}%`;
+
+      // Update text overlays
+      updateOverlays(progress);
+
+      // Calculate target frame
+      targetFrameIndex = Math.floor(progress * (frameCount - 1));
+
+      if (!isScrolling) {
+        isScrolling = true;
+        requestAnimationFrame(renderLoop);
+      }
+    }, { passive: true });
+
+    // 3. Render loop
+    function renderLoop() {
+      if (currentFrameIndex !== targetFrameIndex) {
+        currentFrameIndex = targetFrameIndex;
+        if (imageCache[currentFrameIndex] && imageCache[currentFrameIndex].complete) {
+          img.src = imageCache[currentFrameIndex].src;
+        }
+      }
+
+      if (currentFrameIndex !== targetFrameIndex) {
+        requestAnimationFrame(renderLoop);
+      } else {
+        isScrolling = false;
+      }
+    }
+
+    // 4. Update overlay visibility based on scroll progress
+    function updateOverlays(progress) {
+      overlays.forEach(ov => {
+        if (progress >= ov.start && progress <= ov.end) {
+          ov.el.classList.add('visible');
+        } else {
+          ov.el.classList.remove('visible');
+        }
+      });
+    }
+  </script>
+</body>
+</html>
