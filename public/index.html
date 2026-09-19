@@ -2,646 +2,537 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ScrollScrub — Cinematic Scroll Experiences</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ScrollScrub: animated websites, five pages for ₹10,000</title>
+  <meta name="description" content="Fully dynamic, fully responsive websites with five animated pages, driven by scroll and touch and customised to your choice. Build from ₹10,000.">
+  <meta name="theme-color" content="#0d1210">
 
-    html { scroll-behavior: smooth; }
+  <!-- Lock scroll until the hero frames are preloaded. Added via JS so that
+       visitors with JavaScript disabled are never locked out of the page. -->
+  <script>document.documentElement.classList.add('js', 'is-loading');</script>
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0a0a;
-      color: #f5f5f5;
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
+  <!-- Frame 1 is the first thing fetched, so it can paint before anything else. -->
+  <link rel="preload" as="image" href="/frames/frame_0001.jpg" fetchpriority="high">
 
-    /* ===== HEADER / NAV ===== */
-    header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      z-index: 1000;
-      padding: 1.2rem 3rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(10, 10, 10, 0.7);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      transition: background 0.3s ease;
-    }
-
-    .logo {
-      font-size: 1.4rem;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #fff 0%, #888 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    nav ul {
-      display: flex;
-      gap: 2.5rem;
-      list-style: none;
-    }
-
-    nav a {
-      color: #ccc;
-      text-decoration: none;
-      font-size: 0.95rem;
-      font-weight: 500;
-      transition: color 0.2s ease;
-      position: relative;
-    }
-
-    nav a:hover { color: #fff; }
-
-    nav a::after {
-      content: '';
-      position: absolute;
-      bottom: -4px;
-      left: 0;
-      width: 0;
-      height: 2px;
-      background: #fff;
-      transition: width 0.3s ease;
-    }
-
-    nav a:hover::after { width: 100%; }
-
-    .nav-cta {
-      padding: 0.55rem 1.4rem;
-      background: #fff;
-      color: #000 !important;
-      border-radius: 50px;
-      font-weight: 600;
-      font-size: 0.9rem;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .nav-cta:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 8px 25px rgba(255, 255, 255, 0.15);
-    }
-
-    .nav-cta::after { display: none; }
-
-    /* ===== HERO SECTION ===== */
-    .hero {
-      position: relative;
-      height: 600vh; /* tall enough for smooth scrubbing */
-    }
-
-    .hero-sticky {
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      width: 100%;
-      overflow: hidden;
-      background: #000;
-    }
-
-    #frame-img {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: none;
-    }
-
-    /* Text overlays that fade in/out based on scroll progress */
-    .hero-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      pointer-events: none;
-      z-index: 10;
-    }
-
-    .overlay-text {
-      position: absolute;
-      text-align: center;
-      opacity: 0;
-      transform: translateY(30px);
-      transition: opacity 0.4s ease, transform 0.4s ease;
-      max-width: 800px;
-      padding: 0 2rem;
-    }
-
-    .overlay-text.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .overlay-text h1 {
-      font-size: clamp(2.5rem, 6vw, 5rem);
-      font-weight: 800;
-      letter-spacing: -2px;
-      line-height: 1.1;
-      margin-bottom: 1rem;
-      background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.7) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .overlay-text h2 {
-      font-size: clamp(2rem, 4.5vw, 3.8rem);
-      font-weight: 700;
-      letter-spacing: -1.5px;
-      line-height: 1.15;
-      margin-bottom: 1rem;
-      color: #fff;
-    }
-
-    .overlay-text p {
-      font-size: clamp(1rem, 1.8vw, 1.3rem);
-      color: rgba(255, 255, 255, 0.75);
-      font-weight: 400;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    .overlay-text .tag {
-      display: inline-block;
-      padding: 0.4rem 1rem;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 50px;
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #fff;
-      margin-bottom: 1.5rem;
-      backdrop-filter: blur(10px);
-    }
-
-    /* Progress bar at bottom of hero */
-    .scroll-progress {
-      position: absolute;
-      bottom: 2rem;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.8rem;
-    }
-
-    .scroll-progress span {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      color: rgba(255, 255, 255, 0.5);
-    }
-
-    .progress-bar {
-      width: 120px;
-      height: 2px;
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      width: 0%;
-      background: #fff;
-      border-radius: 2px;
-      transition: width 0.1s ease;
-    }
-
-    /* Status text (shown while loading) */
-    .status-text {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.7);
-      padding: 1rem 2rem;
-      border-radius: 12px;
-      font-size: 0.95rem;
-      color: #aaa;
-      z-index: 5;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    /* ===== SAMPLE SECTIONS ===== */
-    .section {
-      padding: 8rem 3rem;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .section-label {
-      display: inline-block;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 3px;
-      color: #666;
-      margin-bottom: 1.5rem;
-      font-weight: 600;
-    }
-
-    .section h2 {
-      font-size: clamp(2rem, 4vw, 3.2rem);
-      font-weight: 700;
-      letter-spacing: -1px;
-      line-height: 1.2;
-      margin-bottom: 1.5rem;
-      color: #fff;
-    }
-
-    .section p {
-      font-size: 1.15rem;
-      color: #999;
-      max-width: 650px;
-      line-height: 1.7;
-    }
-
-    /* Features grid */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 2rem;
-      margin-top: 4rem;
-    }
-
-    .feature-card {
-      padding: 2.5rem;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 20px;
-      transition: transform 0.3s ease, border-color 0.3s ease;
-    }
-
-    .feature-card:hover {
-      transform: translateY(-4px);
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .feature-icon {
-      width: 48px;
-      height: 48px;
-      background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .feature-card h3 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin-bottom: 0.75rem;
-      color: #fff;
-    }
-
-    .feature-card p {
-      font-size: 0.95rem;
-      color: #888;
-      line-height: 1.6;
-    }
-
-    /* CTA Section */
-    .cta-section {
-      text-align: center;
-      padding: 10rem 3rem;
-      position: relative;
-    }
-
-    .cta-section::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .cta-section h2 {
-      font-size: clamp(2.5rem, 5vw, 4rem);
-      font-weight: 800;
-      letter-spacing: -1.5px;
-      margin-bottom: 1.5rem;
-    }
-
-    .cta-section p {
-      font-size: 1.2rem;
-      color: #888;
-      margin: 0 auto 3rem;
-      max-width: 500px;
-    }
-
-    .cta-btn {
-      display: inline-block;
-      padding: 1rem 2.5rem;
-      background: #fff;
-      color: #000;
-      text-decoration: none;
-      font-weight: 700;
-      font-size: 1rem;
-      border-radius: 50px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .cta-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 40px rgba(255, 255, 255, 0.2);
-    }
-
-    /* Footer */
-    footer {
-      padding: 3rem;
-      text-align: center;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      color: #555;
-      font-size: 0.9rem;
-    }
-
-    footer a {
-      color: #888;
-      text-decoration: none;
-      margin: 0 1rem;
-    }
-
-    footer a:hover { color: #fff; }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      header { padding: 1rem 1.5rem; }
-      nav ul { gap: 1.2rem; }
-      .section { padding: 5rem 1.5rem; }
-      .cta-section { padding: 6rem 1.5rem; }
-    }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
 
   <!-- ===== HEADER ===== -->
-  <header>
-    <div class="logo">ScrollScrub</div>
-    <nav>
+  <header class="site-header">
+    <a class="logo" href="#hero">ScrollScrub</a>
+
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+      <span></span><span></span>
+    </button>
+
+    <nav id="site-nav" class="site-nav" aria-label="Main">
       <ul>
         <li><a href="#features">Features</a></li>
-        <li><a href="#about">About</a></li>
-        <li><a href="/upload.html">Upload</a></li>
-        <li><a href="#cta" class="nav-cta">Get Started</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#message" class="nav-cta">Get started</a></li>
       </ul>
     </nav>
   </header>
 
-  <!-- ===== HERO (Scroll-Scrubbing Video) ===== -->
-  <section class="hero" id="hero">
-    <div class="hero-sticky">
-      <img id="frame-img" src="" alt="">
+  <main>
+    <!-- ===== HERO: scroll-scrubbed frames ===== -->
+    <section class="hero" id="hero" aria-label="Introduction">
+      <div class="hero-stage">
 
-      <!-- Text overlays — each visible during a different scroll range -->
-      <div class="hero-overlay">
-        <div class="overlay-text" id="overlay-1">
-          <div class="tag">✦ Cinematic Scroll</div>
-          <h1>Scroll to Experience</h1>
-          <p>Every frame tells a story. Scroll down and watch the video come alive beneath your cursor.</p>
+        <!-- Frame 1 as a plain <img>: paints instantly and is the no-JS fallback. -->
+        <img class="hero-poster" src="/frames/frame_0001.jpg" alt="" fetchpriority="high" decoding="async">
+        <canvas class="hero-canvas" id="hero-canvas" aria-hidden="true"></canvas>
+        <div class="hero-scrim"></div>
+
+        <!-- Copy. Each slide fades in/out across its own scroll range
+             (data-start / data-end are 0–1 progress through the hero). -->
+        <div class="hero-copy">
+          <div class="hero-slide" data-start="0" data-end="0.18">
+            <h1 class="hero-title">Fully dynamic. Fully responsive.</h1>
+            <p>One page that moves as your visitor scrolls, and fits every screen from phone to desktop.</p>
+          </div>
+          <div class="hero-slide" data-start="0.26" data-end="0.44">
+            <h2 class="hero-title">Five animated pages</h2>
+            <p>Five full-screen scenes that play one after another, each with its own motion.</p>
+          </div>
+          <div class="hero-slide" data-start="0.52" data-end="0.70">
+            <h2 class="hero-title">Driven by scroll and touch</h2>
+            <p>The page follows a mouse wheel or a swipe, frame by frame. Your visitor sets the pace.</p>
+          </div>
+          <div class="hero-slide" data-start="0.78" data-end="1">
+            <h2 class="hero-title">Customised to your choice</h2>
+            <p>Your video, your words, your look. Tell us what you need and we'll build it.</p>
+            <a class="hero-cta" href="#message">Get started</a>
+          </div>
         </div>
 
-        <div class="overlay-text" id="overlay-2">
-          <h2>Frame by Frame</h2>
-          <p>Precision-crafted transitions. Each mouse movement reveals a new moment, frozen in time.</p>
-        </div>
-
-        <div class="overlay-text" id="overlay-3">
-          <h2>Built for Impact</h2>
-          <p>Turn any video into an interactive, scroll-driven experience that captivates your audience.</p>
-        </div>
-
-        <div class="overlay-text" id="overlay-4">
-          <h2>Ready to Launch</h2>
-          <p>Upload your own video and create your own scroll-scrubbing masterpiece.</p>
+        <!-- Loading progress first, then scroll progress once frames are ready. -->
+        <div class="hero-meter" id="hero-meter" role="status" aria-live="polite">
+          <span class="hero-meter-label" id="meter-label">Loading 0%</span>
+          <span class="hero-meter-bar"><i id="meter-fill"></i></span>
         </div>
       </div>
+    </section>
 
-      <!-- Scroll progress indicator -->
-      <div class="scroll-progress">
-        <span>Scroll</span>
-        <div class="progress-bar">
-          <div class="progress-fill" id="progress-fill"></div>
+    <!-- ===== GALLERY: 3x2 grid, hover/tap a frame to bring it forward ===== -->
+    <section class="section gallery" id="gallery">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>Every frame, a scene</h2>
+          <p>
+            <span class="hint-hover">Hover a frame to bring it forward.</span>
+            <span class="hint-touch">Tap a frame to bring it forward.</span>
+          </p>
+        </div>
+
+        <div class="gallery-grid reveal" id="gallery-grid" style="--i:1">
+          <button class="g-item" type="button" aria-pressed="false"><img src="/frames/frame_0001.jpg" alt="A closed pink rose bud covered in dew" loading="lazy" decoding="async"></button>
+          <button class="g-item" type="button" aria-pressed="false"><img src="/frames/frame_0024.jpg" alt="The bud beginning to open" loading="lazy" decoding="async"></button>
+          <button class="g-item" type="button" aria-pressed="false"><img src="/frames/frame_0048.jpg" alt="Outer petals loosening" loading="lazy" decoding="async"></button>
+          <button class="g-item" type="button" aria-pressed="false"><img src="/frames/frame_0072.jpg" alt="The rose half open" loading="lazy" decoding="async"></button>
+          <button class="g-item" type="button" aria-pressed="false"><img src="/frames/frame_0096.jpg" alt="Petals spreading wide" loading="lazy" decoding="async"></button>
+          <button class="g-item" type="button" aria-pressed="false"><img src="/frames/frame_0120.jpg" alt="The rose in full bloom" loading="lazy" decoding="async"></button>
         </div>
       </div>
+    </section>
 
-      <div class="status-text" id="status">Loading frames…</div>
+    <!-- ===== FEATURES: 2x2 cards that flip in 3D ===== -->
+    <section class="section features" id="features">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>What you get</h2>
+          <p>
+            <span class="hint-hover">Hover a card to read more.</span>
+            <span class="hint-touch">Tap a card to read more.</span>
+          </p>
+        </div>
+
+        <div class="feature-grid">
+          <button class="flip reveal" type="button" style="--i:0" aria-pressed="false">
+            <span class="flip-inner">
+              <span class="flip-face flip-front"><span class="flip-title">Scroll<br>Animation</span></span>
+              <span class="flip-face flip-back"><span class="flip-text">Your video plays frame by frame as visitors scroll, so every page feels alive.</span></span>
+            </span>
+          </button>
+          <button class="flip reveal" type="button" style="--i:1" aria-pressed="false">
+            <span class="flip-inner">
+              <span class="flip-face flip-front"><span class="flip-title">Touch<br>Ready</span></span>
+              <span class="flip-face flip-back"><span class="flip-text">A swipe on a phone drives the same motion as a mouse wheel on a desktop.</span></span>
+            </span>
+          </button>
+          <button class="flip reveal" type="button" style="--i:2" aria-pressed="false">
+            <span class="flip-inner">
+              <span class="flip-face flip-front"><span class="flip-title">Instant<br>Loading</span></span>
+              <span class="flip-face flip-back"><span class="flip-text">The first frame shows straight away while the rest loads quietly behind it.</span></span>
+            </span>
+          </button>
+          <button class="flip reveal" type="button" style="--i:3" aria-pressed="false">
+            <span class="flip-inner">
+              <span class="flip-face flip-front"><span class="flip-title">Fully<br>Custom</span></span>
+              <span class="flip-face flip-back"><span class="flip-text">Your footage, your words, your colours. Built around your brand, never a template.</span></span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== HOW IT WORKS: a line draws itself down the page as you scroll ===== -->
+    <section class="section how" id="how">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>How it works</h2>
+          <p>From first idea to a live site in five steps.</p>
+        </div>
+
+        <div class="steps" id="steps">
+          <div class="steps-line" aria-hidden="true"><i></i></div>
+          <ol class="steps-list">
+            <li class="step">
+              <span class="step-dot" aria-hidden="true">1</span>
+              <div class="step-body">
+                <h3>Tell us your idea</h3>
+                <p>Share what you offer, who it's for and the feel you want.</p>
+              </div>
+            </li>
+            <li class="step">
+              <span class="step-dot" aria-hidden="true">2</span>
+              <div class="step-body">
+                <h3>Send your material</h3>
+                <p>Your video or images, your words and your colours. Not sure what you have? Just ask.</p>
+              </div>
+            </li>
+            <li class="step">
+              <span class="step-dot" aria-hidden="true">3</span>
+              <div class="step-body">
+                <h3>We build five pages</h3>
+                <p>Each page gets its own animation, tuned for scroll on desktop and touch on phones.</p>
+              </div>
+            </li>
+            <li class="step">
+              <span class="step-dot" aria-hidden="true">4</span>
+              <div class="step-body">
+                <h3>Review and refine</h3>
+                <p>You see it working and we adjust it until it feels right.</p>
+              </div>
+            </li>
+            <li class="step">
+              <span class="step-dot" aria-hidden="true">5</span>
+              <div class="step-body">
+                <h3>Go live</h3>
+                <p>Your site goes online. Hosting and ongoing care are optional extras.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PREVIEW: laptop + phone mockups playing a short loop of the live site ===== -->
+    <section class="section preview" id="preview">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>See it live</h2>
+          <p>The same site as it appears on a laptop and on a phone.</p>
+        </div>
+
+        <div class="devices reveal" id="devices" style="--i:1">
+          <figure class="device laptop">
+            <div class="laptop-lid">
+              <div class="screen site-preview" data-device="desktop" aria-hidden="true">
+                <canvas></canvas>
+                <div class="sp-scrim"></div>
+                <div class="sp-bar"><b>ScrollScrub</b><span class="sp-links"><i></i><i></i><i></i><em>Get started</em></span></div>
+                <div class="sp-copy"></div>
+                <div class="sp-scrollbar"><i></i></div>
+              </div>
+            </div>
+            <div class="laptop-base"></div>
+            <figcaption>Laptop</figcaption>
+          </figure>
+
+          <figure class="device phone">
+            <div class="phone-body">
+              <span class="phone-island" aria-hidden="true"></span>
+              <div class="screen site-preview" data-device="mobile" aria-hidden="true">
+                <canvas></canvas>
+                <div class="sp-scrim"></div>
+                <div class="sp-bar"><b>ScrollScrub</b><span class="sp-burger"><i></i><i></i></span></div>
+                <div class="sp-copy"></div>
+                <div class="sp-touch"></div>
+              </div>
+            </div>
+            <figcaption>Phone</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== WHY US: rolled scrolls that unroll to show the reason ===== -->
+    <section class="section why" id="why">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>Why choose us</h2>
+          <p>
+            <span class="hint-hover">Hover a scroll to unroll it.</span>
+            <span class="hint-touch">Tap a scroll to unroll it.</span>
+          </p>
+        </div>
+
+        <div class="scroll-row">
+          <article class="parchment reveal" style="--i:0">
+            <span class="roll" aria-hidden="true"></span>
+            <div class="paper">
+              <h3><button class="paper-head" type="button" aria-expanded="false" aria-controls="why-1">Built to move</button></h3>
+              <div class="paper-body" id="why-1"><div><p>Every section is designed around motion, so the page feels alive from the first scroll to the last.</p></div></div>
+            </div>
+            <span class="roll" aria-hidden="true"></span>
+          </article>
+
+          <article class="parchment reveal" style="--i:1">
+            <span class="roll" aria-hidden="true"></span>
+            <div class="paper">
+              <h3><button class="paper-head" type="button" aria-expanded="false" aria-controls="why-2">Fast from frame one</button></h3>
+              <div class="paper-body" id="why-2"><div><p>Your visitor sees a picture instantly while the rest loads quietly in the background.</p></div></div>
+            </div>
+            <span class="roll" aria-hidden="true"></span>
+          </article>
+
+          <article class="parchment reveal" style="--i:2">
+            <span class="roll" aria-hidden="true"></span>
+            <div class="paper">
+              <h3><button class="paper-head" type="button" aria-expanded="false" aria-controls="why-3">Made to measure</button></h3>
+              <div class="paper-body" id="why-3"><div><p>Your footage, your words and your colours. Nothing is copied from a template.</p></div></div>
+            </div>
+            <span class="roll" aria-hidden="true"></span>
+          </article>
+
+          <article class="parchment reveal" style="--i:3">
+            <span class="roll" aria-hidden="true"></span>
+            <div class="paper">
+              <h3><button class="paper-head" type="button" aria-expanded="false" aria-controls="why-4">Works everywhere</button></h3>
+              <div class="paper-body" id="why-4"><div><p>Phones, tablets, laptops and large screens. Mouse, touch or keyboard.</p></div></div>
+            </div>
+            <span class="roll" aria-hidden="true"></span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PRICING: price counts up, five pages fill in ===== -->
+    <section class="section pricing" id="pricing">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>Simple pricing</h2>
+          <p>One price to build your site. Hosting, maintenance and anything else are quoted around what you need.</p>
+        </div>
+
+        <div class="pricing-grid">
+          <article class="price-main reveal" style="--i:1">
+            <div class="price-inner">
+              <p class="price-kicker">Website build</p>
+              <p class="price" aria-label="10,000 rupees">
+                <span class="price-cur" aria-hidden="true">₹</span><span class="price-num" data-count="10000" aria-hidden="true">10,000</span>
+              </p>
+              <p class="price-note">One time · 5 animated pages</p>
+
+              <div class="pages-row" aria-hidden="true">
+                <i style="--n:0"></i><i style="--n:1"></i><i style="--n:2"></i><i style="--n:3"></i><i style="--n:4"></i>
+              </div>
+
+              <ul class="price-list">
+                <li>Five pages, each with its own animation</li>
+                <li>Driven by scroll and touch</li>
+                <li>Fully dynamic and responsive</li>
+                <li>Built around your video, words and colours</li>
+              </ul>
+              <a class="btn" href="#message" data-topic="Website build (5 pages)">Start your project</a>
+            </div>
+          </article>
+
+          <div class="addons">
+            <article class="addon reveal" style="--i:2">
+              <h3>Hosting</h3>
+              <p>Get your site online and keep it running smoothly.</p>
+              <span class="addon-tag">Quoted separately</span>
+              <a class="addon-link" href="#message" data-topic="Hosting">Ask for a quote</a>
+            </article>
+            <article class="addon reveal" style="--i:3">
+              <h3>Maintenance</h3>
+              <p>Updates, fixes and changes after launch.</p>
+              <span class="addon-tag">Quoted separately</span>
+              <a class="addon-link" href="#message" data-topic="Maintenance">Ask for a quote</a>
+            </article>
+            <article class="addon reveal" style="--i:4">
+              <h3>Anything else</h3>
+              <p>Extra pages, new features or something unusual. Tell us what you need.</p>
+              <span class="addon-tag">Based on your needs</span>
+              <a class="addon-link" href="#message" data-topic="Something else">Ask for a quote</a>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FAQ: answers come into focus, plus turns to minus ===== -->
+    <section class="section faq" id="faq">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>Questions, answered</h2>
+          <p>Can't find yours? Send us a message below.</p>
+        </div>
+
+        <div class="faq-list reveal" style="--i:1">
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" id="faq-q1" aria-expanded="false" aria-controls="faq-a1"><span>What do I get for ₹10,000?</span><span class="faq-icon" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-a1" role="region" aria-labelledby="faq-q1"><div><p>A five-page website where every page has its own scroll and touch animation. It is fully dynamic and responsive, so it fits phones, tablets and desktops.</p></div></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" id="faq-q2" aria-expanded="false" aria-controls="faq-a2"><span>What do you need from me?</span><span class="faq-icon" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-a2" role="region" aria-labelledby="faq-q2"><div><p>Your video or images, your text and any brand colours or logo. If you don't have footage yet, tell us and we'll work out the best option together.</p></div></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" id="faq-q3" aria-expanded="false" aria-controls="faq-a3"><span>How long does it take?</span><span class="faq-icon" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-a3" role="region" aria-labelledby="faq-q3"><div><p>It depends on your material and how many changes you want. We'll give you a clear timeline once we've agreed the brief.</p></div></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" id="faq-q4" aria-expanded="false" aria-controls="faq-a4"><span>Is hosting included?</span><span class="faq-icon" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-a4" role="region" aria-labelledby="faq-q4"><div><p>No. The ₹10,000 covers building the site. Hosting is quoted separately, based on what you need.</p></div></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" id="faq-q5" aria-expanded="false" aria-controls="faq-a5"><span>What about maintenance and updates?</span><span class="faq-icon" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-a5" role="region" aria-labelledby="faq-q5"><div><p>Maintenance is also separate and quoted to your needs, from small text changes to regular updates.</p></div></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" id="faq-q6" aria-expanded="false" aria-controls="faq-a6"><span>Does it work on phones?</span><span class="faq-icon" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-a6" role="region" aria-labelledby="faq-q6"><div><p>Yes. Scrolling on a desktop and swiping on a phone or tablet both drive the animation.</p></div></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" id="faq-q7" aria-expanded="false" aria-controls="faq-a7"><span>Can I have more than five pages?</span><span class="faq-icon" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-a7" role="region" aria-labelledby="faq-q7"><div><p>Yes. Extra pages or features are quoted separately, based on what you need.</p></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CONTACT: envelope, phone, globe ===== -->
+    <section class="section contact" id="contact">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>Let's talk</h2>
+          <p>
+            <span class="hint-hover">Hover one to see the details.</span>
+            <span class="hint-touch">Tap one to see the details, tap again to use it.</span>
+          </p>
+        </div>
+
+        <div class="contact-grid">
+
+          <!-- Email: the envelope opens and a letter slides out -->
+          <a class="c-item reveal" style="--i:0" href="mailto:graphicyin@gmail.com" aria-label="Email: graphicyin@gmail.com">
+            <span class="c-visual">
+              <span class="env" aria-hidden="true">
+                <span class="env-back"></span>
+                <span class="env-letter">
+                  <small>Write to us</small>
+                  <b>graphicyin@gmail.com</b>
+                </span>
+                <span class="env-front"></span>
+                <span class="env-flap">
+                  <span class="env-flap-out"></span>
+                  <span class="env-flap-in"></span>
+                </span>
+              </span>
+            </span>
+            <span class="c-label">Email</span>
+          </a>
+
+          <!-- Phone: the lock screen unlocks and shows the number -->
+          <a class="c-item reveal" style="--i:1" href="tel:+917504704502" aria-label="Phone: +91 75047 04502">
+            <span class="c-visual">
+              <span class="pl" aria-hidden="true">
+                <span class="pl-island"></span>
+                <span class="pl-screen">
+                  <span class="pl-home">
+                    <small>Call us</small>
+                    <b>+91 75047<br>04502</b>
+                  </span>
+                  <span class="pl-lock">
+                    <span class="pl-time">9:41</span>
+                    <svg class="lock" viewBox="0 0 24 30" width="34" height="42">
+                      <path class="lock-shackle" d="M6 13V9a6 6 0 0 1 12 0v4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                      <rect x="3" y="12" width="18" height="15" rx="3.5" fill="currentColor"/>
+                      <circle cx="12" cy="19" r="2" fill="#0d1210"/>
+                    </svg>
+                    <span class="pl-hint">Locked</span>
+                  </span>
+                </span>
+              </span>
+            </span>
+            <span class="c-label">Phone</span>
+          </a>
+
+          <!-- Website: the globe turns to show the link carved on its far side -->
+          <a class="c-item c-globe reveal" style="--i:2" href="https://sanjaymeher.online" target="_blank" rel="noopener" aria-label="Website: sanjaymeher.online" data-url="sanjaymeher.online">
+            <span class="c-visual">
+              <span class="globe" aria-hidden="true">
+                <span class="globe-canvas"></span>
+                <span class="globe-fallback"><span>sanjaymeher.online</span></span>
+              </span>
+            </span>
+            <span class="c-label">Website</span>
+          </a>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== MESSAGE: floating labels, paper plane on send ===== -->
+    <section class="section message" id="message">
+      <div class="wrap message-layout">
+        <div class="section-head reveal">
+          <h2>Tell us about your project</h2>
+          <p>Share what you have in mind and we'll get back to you. Prefer to talk? Call <a class="inline-link" href="tel:+917504704502">+91 75047 04502</a>.</p>
+        </div>
+
+        <form class="form reveal" id="contact-form" style="--i:1" novalidate>
+          <div class="field">
+            <input id="f-name" name="name" type="text" autocomplete="name" placeholder=" " required>
+            <label for="f-name">Your name</label>
+            <span class="field-line" aria-hidden="true"></span>
+            <span class="field-error" id="e-name" role="alert"></span>
+          </div>
+
+          <div class="field">
+            <input id="f-email" name="email" type="email" autocomplete="email" placeholder=" " required>
+            <label for="f-email">Your email</label>
+            <span class="field-line" aria-hidden="true"></span>
+            <span class="field-error" id="e-email" role="alert"></span>
+          </div>
+
+          <div class="field field-select">
+            <select id="f-topic" name="topic">
+              <option>Website build (5 pages)</option>
+              <option>Hosting</option>
+              <option>Maintenance</option>
+              <option>Something else</option>
+            </select>
+            <label for="f-topic">I'm interested in</label>
+            <span class="field-line" aria-hidden="true"></span>
+          </div>
+
+          <div class="field">
+            <textarea id="f-message" name="message" rows="4" placeholder=" " required></textarea>
+            <label for="f-message">Your message</label>
+            <span class="field-line" aria-hidden="true"></span>
+            <span class="field-error" id="e-message" role="alert"></span>
+          </div>
+
+          <!-- Spam trap: real people never see or fill this -->
+          <input class="hp" type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+          <button class="send" type="submit" data-state="idle">
+            <span class="send-label">Send message</span>
+            <svg class="plane" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 11.5 21 3l-5.5 18-3.6-7.2L3 11.5z" fill="currentColor"/></svg>
+            <svg class="check" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/></svg>
+            <span class="spinner" aria-hidden="true"></span>
+          </button>
+
+          <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- ===== FINAL CTA: petals drift, lines rise into place, button follows the cursor ===== -->
+    <section class="section cta" id="start">
+      <div class="cta-petals" id="cta-petals" aria-hidden="true"></div>
+      <div class="wrap cta-inner">
+        <h2 class="cta-title reveal">
+          <span class="line"><span>Ready to make</span></span>
+          <span class="line"><span>your site move?</span></span>
+        </h2>
+        <p class="cta-sub reveal" style="--i:2">Five animated pages for ₹10,000. Tell us your idea and we'll take it from there.</p>
+        <div class="cta-actions reveal" style="--i:3">
+          <a class="btn btn-magnetic" href="#message">Start your project</a>
+          <a class="btn-ghost" href="tel:+917504704502">Call +91 75047 04502</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p>© 2026 ScrollScrub · <a href="mailto:graphicyin@gmail.com">graphicyin@gmail.com</a> · <a href="https://sanjaymeher.online" target="_blank" rel="noopener">sanjaymeher.online</a></p>
+      <a href="#hero">Back to top</a>
     </div>
-  </section>
-
-  <!-- ===== FEATURES SECTION ===== -->
-  <section class="section" id="features">
-    <span class="section-label">Features</span>
-    <h2>Everything you need to<br>create scroll magic.</h2>
-    <p>Simple tools, powerful results. No complex frameworks required.</p>
-
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">🎬</div>
-        <h3>Video to Frames</h3>
-        <p>Upload any video format. Our server extracts every frame with ffmpeg at your chosen resolution and framerate.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🖱️</div>
-        <h3>Scroll-Driven</h3>
-        <p>Map scroll position directly to video frames. Smooth, responsive, and works on every device.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">⚡</div>
-        <h3>Preloaded & Fast</h3>
-        <p>All frames are preloaded into memory for buttery-smooth 60fps playback with zero lag.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🎨</div>
-        <h3>Text Overlays</h3>
-        <p>Add animated text that fades in and out as you scroll, creating cinematic storytelling experiences.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📱</div>
-        <h3>Fully Responsive</h3>
-        <p>Works beautifully on desktop and mobile. Touch scrolling maps perfectly to frame scrubbing.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🔧</div>
-        <h3>Zero Dependencies</h3>
-        <p>Pure HTML, CSS, and JavaScript. No React, no GSAP, no heavy libraries. Just clean code.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== ABOUT SECTION ===== -->
-  <section class="section" id="about">
-    <span class="section-label">About</span>
-    <h2>The art of scroll-driven storytelling.</h2>
-    <p>
-      Inspired by the cinematic product pages of Apple, Tesla, and other industry leaders,
-      ScrollScrub turns ordinary videos into immersive, scroll-driven experiences. 
-      Every pixel of movement reveals a new frame, giving your audience complete control
-      over the narrative pace.
-    </p>
-    <br><br>
-    <p>
-      Built with Node.js, Express, and ffmpeg — it's lightweight, fast, and entirely self-hosted.
-      Drop in your video, and the server handles the rest.
-    </p>
-  </section>
-
-  <!-- ===== CTA SECTION ===== -->
-  <section class="cta-section" id="cta">
-    <h2>Start building today.</h2>
-    <p>Upload your first video and create a scroll experience your visitors won't forget.</p>
-    <a href="/upload.html" class="cta-btn">Upload a Video →</a>
-  </section>
-
-  <!-- ===== FOOTER ===== -->
-  <footer>
-    <p>
-      <a href="#">Documentation</a>
-      <a href="#">GitHub</a>
-      <a href="#">Contact</a>
-    </p>
-    <br>
-    <p>© 2026 ScrollScrub. Built with Node.js & ffmpeg.</p>
   </footer>
 
-  <!-- ===== SCRIPT ===== -->
-  <script>
-    const hero = document.getElementById('hero');
-    const img = document.getElementById('frame-img');
-    const statusEl = document.getElementById('status');
-    const progressFill = document.getElementById('progress-fill');
-
-    // Overlay elements and their visibility ranges (0.0 - 1.0)
-    const overlays = [
-      { el: document.getElementById('overlay-1'), start: 0.00, end: 0.22 },
-      { el: document.getElementById('overlay-2'), start: 0.25, end: 0.47 },
-      { el: document.getElementById('overlay-3'), start: 0.50, end: 0.72 },
-      { el: document.getElementById('overlay-4'), start: 0.75, end: 0.97 },
-    ];
-
-    let frameCount = 0;
-    let isLoaded = false;
-    let imageCache = [];
-    let currentFrameIndex = 0;
-    let targetFrameIndex = 0;
-    let isScrolling = false;
-
-    // 1. Fetch manifest and preload all frames
-    fetch('/api/frame-count')
-      .then(res => res.json())
-      .then(data => {
-        frameCount = data.count;
-        if (frameCount > 0) {
-          statusEl.textContent = `Preloading ${frameCount} frames…`;
-
-          let loadedCount = 0;
-          for (let i = 0; i < frameCount; i++) {
-            const frameNum = String(i + 1).padStart(4, '0');
-            const imgObj = new Image();
-            imgObj.src = `/frames/frame_${frameNum}.jpg`;
-
-            imgObj.onload = () => {
-              loadedCount++;
-              statusEl.textContent = `Preloading… ${Math.round((loadedCount / frameCount) * 100)}%`;
-
-              if (loadedCount === frameCount) {
-                isLoaded = true;
-                statusEl.style.display = 'none';
-                img.style.display = 'block';
-                img.src = imageCache[0].src;
-                updateOverlays(0); // Show first overlay
-              }
-            };
-            imageCache.push(imgObj);
-          }
-        } else {
-          statusEl.textContent = 'No frames found. Upload a video to begin.';
-        }
-      })
-      .catch(err => {
-        statusEl.textContent = 'Error loading frames.';
-        console.error(err);
-      });
-
-    // 2. Scroll event — calculate progress and target frame
-    window.addEventListener('scroll', () => {
-      if (!isLoaded) return;
-
-      const rect = hero.getBoundingClientRect();
-      const heroHeight = hero.offsetHeight;
-      const viewportHeight = window.innerHeight;
-      const scrolled = -rect.top;
-      const scrollableDistance = heroHeight - viewportHeight;
-
-      if (scrollableDistance <= 0) return;
-
-      let progress = scrolled / scrollableDistance;
-      progress = Math.max(0, Math.min(1, progress));
-
-      // Update progress bar
-      progressFill.style.width = `${progress * 100}%`;
-
-      // Update text overlays
-      updateOverlays(progress);
-
-      // Calculate target frame
-      targetFrameIndex = Math.floor(progress * (frameCount - 1));
-
-      if (!isScrolling) {
-        isScrolling = true;
-        requestAnimationFrame(renderLoop);
-      }
-    }, { passive: true });
-
-    // 3. Render loop
-    function renderLoop() {
-      if (currentFrameIndex !== targetFrameIndex) {
-        currentFrameIndex = targetFrameIndex;
-        if (imageCache[currentFrameIndex] && imageCache[currentFrameIndex].complete) {
-          img.src = imageCache[currentFrameIndex].src;
-        }
-      }
-
-      if (currentFrameIndex !== targetFrameIndex) {
-        requestAnimationFrame(renderLoop);
-      } else {
-        isScrolling = false;
-      }
-    }
-
-    // 4. Update overlay visibility based on scroll progress
-    function updateOverlays(progress) {
-      overlays.forEach(ov => {
-        if (progress >= ov.start && progress <= ov.end) {
-          ov.el.classList.add('visible');
-        } else {
-          ov.el.classList.remove('visible');
-        }
-      });
-    }
-  </script>
+  <script src="/js/hero.js"></script>
+  <script src="/js/sections.js"></script>
 </body>
 </html>
