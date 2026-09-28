@@ -22,13 +22,8 @@ const CATEGORIES = [
 for (const d of [PUBLIC_DIR, FRAMES_DIR, UPLOADS_DIR]) fs.mkdirSync(d, { recursive: true });
 CATEGORIES.forEach(c => fs.mkdirSync(path.join(FRAMES_DIR, c.id), { recursive: true }));
 
-const candidates = [
-  path.join(__dirname, 'ffmpeg.exe'), path.join(__dirname, 'bin', 'ffmpeg.exe'),
-  path.join(__dirname, 'ffmpeg', 'ffmpeg.exe'), path.join(__dirname, 'ffmpeg'),
-  path.join(__dirname, 'bin', 'ffmpeg')
-];
-const FFMPEG_PATH = candidates.find(p => fs.existsSync(p)) || 'ffmpeg';
-console.log(FFMPEG_PATH === 'ffmpeg' ? 'Using ffmpeg from system PATH.' : `Using bundled ffmpeg: ${FFMPEG_PATH}`);
+const FFMPEG_PATH = path.join(__dirname, 'ffmpeg');
+console.log(`Using bundled ffmpeg: ${FFMPEG_PATH}`);
 
 const loadData = () => { try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { return {}; } };
 const saveData = d => fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2));
@@ -83,7 +78,7 @@ app.post('/api/upload/:cat', (req, res) => {
       fs.unlink(req.file.path, () => {});
       if (e) {
         console.error(stderr);
-        return res.status(500).json({ error: 'ffmpeg failed. Is it installed or placed in the project folder?', detail: (stderr || String(e)).split('\n').slice(-5).join('\n') });
+        return res.status(500).json({ error: 'ffmpeg failed. Check the root-level ffmpeg executable.', detail: (stderr || String(e)).split('\n').slice(-5).join('\n') });
       }
       const count = fs.readdirSync(dir).filter(f => f.endsWith('.jpg')).length;
       if (!count) return res.status(500).json({ error: 'ffmpeg produced no frames.' });
