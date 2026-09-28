@@ -32,6 +32,7 @@ console.log(FFMPEG_PATH === 'ffmpeg' ? 'Using ffmpeg from system PATH.' : `Using
 
 const loadData = () => { try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { return {}; } };
 const saveData = d => fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2));
+const loadManifest = id => { try { return JSON.parse(fs.readFileSync(path.join(FRAMES_DIR, id, 'manifest.json'), 'utf8')); } catch { return {}; } };
 const SLOTS = 5, SLOT_PCT = 100 / SLOTS; // 10s video, 5 dishes, one every 2s
 const blankDishes = () => Array.from({ length: SLOTS }, (_, i) => ({ name: `Dish ${i + 1}`, price: '', url: '', description: '', start: i * SLOT_PCT }));
 const validCat = id => CATEGORIES.some(c => c.id === id);
@@ -52,12 +53,15 @@ const upload = multer({
 // Full menu: categories, frame counts, dishes
 app.get('/api/menu', (req, res) => {
   const data = loadData();
-  res.json(CATEGORIES.map(c => ({
-    id: c.id, title: c.title,
-    count: data[c.id]?.count || 0,
-    version: data[c.id]?.version || 0,
-    dishes: data[c.id]?.dishes?.length === SLOTS ? data[c.id].dishes : blankDishes()
-  })));
+  res.json(CATEGORIES.map(c => {
+    const manifest = loadManifest(c.id);
+    return {
+      id: c.id, title: c.title,
+      count: data[c.id]?.count || manifest.count || 0,
+      version: data[c.id]?.version || Date.parse(manifest.generatedAt) || 0,
+      dishes: data[c.id]?.dishes?.length === SLOTS ? data[c.id].dishes : blankDishes()
+    };
+  }));
 });
 
 // Upload video for one category -> frames in public/frames/<id>/
@@ -84,6 +88,7 @@ app.post('/api/upload/:cat', (req, res) => {
       const count = fs.readdirSync(dir).filter(f => f.endsWith('.jpg')).length;
       if (!count) return res.status(500).json({ error: 'ffmpeg produced no frames.' });
 
+      fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ count, fps, width, generatedAt: new Date().toISOString() }, null, 2));
       const data = loadData();
       const prev = data[cat] || {};
       const dishes = prev.dishes?.length === SLOTS ? prev.dishes : blankDishes();
