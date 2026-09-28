@@ -1,5 +1,5 @@
 {
-  "name": "scroll-scrubber-server",
+  "name": "menu-scroller",
   "version": "1.0.0",
   "private": true,
   "description": "Upload a video, server extracts frames with ffmpeg, scrub them with mouse/scroll.",

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu admin</title>
+<style>
+  :root { --bg:#1d1424; --panel:#2a1c34; --line:#43304f; --ink:#f6eef8; --mute:#b9a6c4; --gold:#f2b134; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px 16px 64px; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:820px; margin:0 auto; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  p.sub { color:var(--mute); margin:0 0 24px; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; }
+  h2 { margin:0 0 12px; font-size:20px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  input[type=text], input[type=number], textarea { background:#1d1424; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:8px 10px; font:inherit; }
+  input[type=file] { color:var(--mute); max-width:100%; }
+  button { background:var(--gold); color:#2a1c00; border:0; border-radius:8px; padding:9px 14px; font:inherit; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  button:disabled { opacity:.5; cursor:wait; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+  .status { color:var(--mute); font-size:14px; }
+  .status.err { color:#ff9c9c; } .status.ok { color:#9be3a8; }
+  .dish { display:grid; grid-template-columns: 1.4fr .7fr 1.4fr; gap:8px; margin-bottom:8px; }
+  .dish textarea { grid-column:1 / -1; min-height:52px; resize:vertical; }
+  .dish input { width:100%; }
+  label.small { font-size:13px; color:var(--mute); }
+  @media (max-width:560px){ .dish { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Menu admin</h1>
+  <p class="sub">Upload one 10-second video per group, then name the 5 dishes shown at 2-second steps.</p>
+  <div id="groups"></div>
+</main>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const groups = $('#groups');
+
+function setStatus(el, msg, cls = '') { el.textContent = msg; el.className = 'status ' + cls; }
+
+const TIMES = ['0-2s', '2-4s', '4-6s', '6-8s', '8-10s'];
+function dishRow(d, i) {
+  const r = document.createElement('div');
+  r.className = 'dish';
+  r.innerHTML = `
+    <input type="text" class="n" placeholder="Dish name (${TIMES[i]})" aria-label="Dish name at ${TIMES[i]}">
+    <input type="text" class="p" placeholder="Price" aria-label="Price">
+    <input type="text" class="u" placeholder="Link URL (optional)" aria-label="Link URL" style="grid-column:span 2">
+    <textarea class="d" placeholder="Short description" aria-label="Description"></textarea>`;
+  $('.n', r).value = d.name || ''; $('.p', r).value = d.price || '';
+  $('.u', r).value = d.url || ''; $('.d', r).value = d.description || '';
+  return r;
+}
+
+function buildGroup(c) {
+  const sec = document.createElement('section');
+  sec.innerHTML = `
+    <h2>${c.title}</h2>
+    <div class="row">
+      <input type="file" accept="video/*,.mkv,.avi" class="file" aria-label="Video for ${c.title}">
+      <label class="small">Frames per second <input type="number" class="fps" value="24" min="1" max="60" style="width:70px"></label>
+      <button type="button" class="up">Upload video</button>
+    </div>
+    <div class="status upstatus"></div>
+    <h3 style="margin:16px 0 4px;font-size:16px">Dishes</h3>
+    <div class="label small" style="margin-bottom:8px">The video is 10 seconds. Name changes every 2 seconds: 0-2s, 2-4s, 4-6s, 6-8s, 8-10s.</div>
+    <div class="dishes"></div>
+    <div class="row">
+      <button type="button" class="save">Save dishes</button>
+      <span class="status savestatus"></span>
+    </div>`;
+  const list = $('.dishes', sec);
+  for (let i = 0; i < 5; i++) list.appendChild(dishRow(c.dishes[i] || {}, i));
+
+  const upStatus = $('.upstatus', sec);
+  if (c.count) setStatus(upStatus, `Current video: ${c.count} frames.`);
+
+  $('.up', sec).onclick = async e => {
+    const file = $('.file', sec).files[0];
+    if (!file) return setStatus(upStatus, 'Choose a video file first.', 'err');
+    const fd = new FormData();
+    fd.append('video', file);
+    fd.append('fps', $('.fps', sec).value);
+    e.target.disabled = true;
+    setStatus(upStatus, 'Uploading and extracting frames. Long videos can take a minute.');
+    try {
+      const res = await fetch(`/api/upload/${c.id}`, { method:'POST', body:fd });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error + (j.detail ? '\n' + j.detail : ''));
+      setStatus(upStatus, `Done: ${j.count} frames.`, 'ok');
+    } catch (err) { setStatus(upStatus, err.message, 'err'); }
+    e.target.disabled = false;
+  };
+
+  $('.save', sec).onclick = async () => {
+    const dishes = [...list.children].map(r => ({
+      name: $('.n', r).value.trim(), price: $('.p', r).value.trim(),
+      url: $('.u', r).value.trim(), description: $('.d', r).value.trim()
+    }));
+    const st = $('.savestatus', sec);
+    try {
+      const res = await fetch(`/api/dishes/${c.id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ dishes }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      setStatus(st, 'Saved.', 'ok');
+    } catch (err) { setStatus(st, err.message, 'err'); }
+  };
+  return sec;
+}
+
+fetch('/api/menu').then(r => r.json()).then(menu => menu.forEach(c => groups.appendChild(buildGroup(c))));
+</script>
+</body>
+</html>

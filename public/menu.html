@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu</title>
+<style>
+  :root { --bg:#1d1424; --panel:#2a1c34; --line:#43304f; --ink:#f6eef8; --mute:#b9a6c4; --gold:#f2b134; }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, sans-serif; }
+  header { position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 20px; background:rgba(29,20,36,.92); backdrop-filter:blur(6px); border-bottom:1px solid var(--line); }
+  header nav { display:flex; gap:14px; overflow-x:auto; }
+  header a { color:var(--mute); text-decoration:none; white-space:nowrap; }
+  header a:hover, header a:focus-visible { color:var(--gold); outline:none; }
+  #order { color:var(--gold); white-space:nowrap; }
+  #speedbox { display:flex; align-items:center; gap:8px; color:var(--mute); font-size:14px; white-space:nowrap; }
+  #speedbox input { width:110px; accent-color:var(--gold); }
+  #speedbox b { color:var(--ink); min-width:2.2em; }
+  #groups { display:grid; grid-template-columns:1fr; max-width:1100px; margin:0 auto; padding:0 16px; }
+  section.group { padding:6vh 0; scroll-margin-top:56px; }
+  /* PC: two groups side by side, with blank gaps and margins that scroll the page */
+  @media (min-width:900px){ #groups { grid-template-columns:1fr 1fr; column-gap:8vw; padding:0 32px; } }
+  h2.title { text-align:center; margin:0 0 20px; font-size:clamp(28px, 5vw, 44px); letter-spacing:-.01em; }
+
+  /* Card is narrower than the screen: the blank margins scroll the page */
+  .card { position:relative; height:min(78vh, 900px); aspect-ratio:9/16; width:auto; max-width:86%; margin:0 auto; background:#000; border-radius:16px; overflow:hidden; touch-action:pan-y; cursor:ew-resize; user-select:none; -webkit-user-select:none; }
+  canvas { width:100%; height:100%; display:block; }
+  .empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--mute); text-align:center; padding:20px; }
+
+  .dish-btn { position:absolute; left:50%; bottom:22px; transform:translateX(-50%); max-width:86%; background:var(--gold); color:#2a1c00; border:0; border-radius:999px; padding:11px 22px; font:600 17px/1.2 system-ui, sans-serif; cursor:pointer; box-shadow:0 6px 24px rgba(0,0,0,.45); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dish-btn:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+  .hint { position:absolute; top:12px; right:14px; font-size:13px; color:#fff; background:rgba(0,0,0,.45); padding:3px 10px; border-radius:999px; pointer-events:none; }
+  .bar { position:absolute; left:0; right:0; bottom:0; height:5px; background:rgba(255,255,255,.18); }
+  .bar i { display:block; height:100%; width:0; background:var(--gold); }
+
+  #modal { position:fixed; inset:0; z-index:20; display:none; place-items:center; background:rgba(10,5,15,.7); padding:20px; }
+  #modal.open { display:grid; }
+  .sheet { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:24px; width:min(420px, 100%); animation:pop .18s ease-out; }
+  @keyframes pop { from { transform:translateY(12px); opacity:0; } }
+  .sheet h3 { margin:0 0 4px; font-size:26px; }
+  .sheet .price { color:var(--gold); font-weight:600; margin-bottom:10px; }
+  .sheet p { color:var(--mute); margin:0 0 18px; }
+  .sheet .actions { display:flex; gap:10px; }
+  .sheet button { flex:1; padding:11px; border-radius:10px; font:600 16px system-ui; cursor:pointer; border:1px solid var(--line); background:transparent; color:var(--ink); }
+  .sheet button.primary { background:var(--gold); color:#2a1c00; border:0; }
+  @media (prefers-reduced-motion:reduce){ html { scroll-behavior:auto; } .sheet { animation:none; } }
+</style>
+</head>
+<body>
+<header>
+  <nav id="nav" aria-label="Menu groups"></nav>
+  <label id="speedbox">Speed <input id="speed" type="range" min="1" max="10" step="1" value="2"> <b id="speedval">2</b></label>
+  <div id="order" aria-live="polite">Order: 0</div>
+</header>
+<main id="groups"></main>
+
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <h3 id="m-name"></h3>
+    <div class="price" id="m-price"></div>
+    <p id="m-desc"></p>
+    <div class="actions">
+      <button id="m-close" type="button">Close</button>
+      <button id="m-add" type="button" class="primary">Add to order</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const pad = n => String(n).padStart(4, '0');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let hovered = null, orderCount = 0, currentDish = null;
+const SPEED_MULT = 0.01;   // slider value (1-10) x 0.01 = frames-per-pixel multiplier (0.01 to 0.10)
+let speedUI = 2;           // slider position shown to the user
+try { const v = parseInt(localStorage.getItem('scrubSpeedUI'), 10); if (v >= 1 && v <= 10) speedUI = v; } catch (e) {}
+let speed = speedUI * SPEED_MULT;
+const speedInput = document.getElementById('speed'), speedVal = document.getElementById('speedval');
+speedInput.value = speedUI; speedVal.textContent = speedUI;
+speedInput.addEventListener('input', () => {
+  speedUI = parseInt(speedInput.value, 10);
+  speed = speedUI * SPEED_MULT; speedVal.textContent = speedUI;
+  try { localStorage.setItem('scrubSpeedUI', speedUI); } catch (e) {}
+});
+
+/* ---------- details modal ---------- */
+const $id = id => document.getElementById(id);
+const modal = $id('modal'), m_name = $id('m-name'), m_price = $id('m-price'), m_desc = $id('m-desc'),
+      m_close = $id('m-close'), m_add = $id('m-add'),
+      nav = $id('nav'), groups = $id('groups'), orderEl = $id('order');
+function openModal(d) {
+  currentDish = d;
+  m_name.textContent = d.name;
+  m_price.textContent = d.price;
+  m_desc.textContent = d.description || 'No description yet.';
+  modal.classList.add('open');
+  m_add.focus();
+}
+const closeModal = () => modal.classList.remove('open');
+m_close.onclick = closeModal;
+modal.onclick = e => { if (e.target === modal) closeModal(); };
+addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+m_add.onclick = () => { orderCount++; orderEl.textContent = 'Order: ' + orderCount; closeModal(); };
+
+/* ---------- one scrubbable video card ---------- */
+function makeScrubber(cat, card) {
+  const canvas = card.querySelector('canvas'), ctx = canvas.getContext('2d');
+  const btn = card.querySelector('.dish-btn'), barFill = card.querySelector('.bar i');
+  const N = cat.count, images = new Array(N), loaded = new Array(N).fill(false);
+  let pos = 0, target = 0, loading = false, lastDish = -1, raf = 0, dragging = false, lastX = 0, dragged = 0;
+
+  const dishAt = frac => {
+    let idx = 0;
+    cat.dishes.forEach((d, i) => { if (frac * 100 >= d.start) idx = i; });
+    return idx;
+  };
+
+  function nearestLoaded(i) {
+    for (let o = 0; o < N; o++) {
+      if (loaded[i - o] ) return i - o;
+      if (loaded[i + o]) return i + o;
+    }
+    return -1;
+  }
+
+  function draw() {
+    const i = nearestLoaded(Math.round(pos));
+    if (i < 0) return;
+    const img = images[i], r = card.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+    const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    const s = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const iw = img.naturalWidth * s, ih = img.naturalHeight * s;
+    ctx.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih);
+  }
+
+  function update() {
+    draw();
+    const frac = N > 1 ? pos / (N - 1) : 0;
+    barFill.style.width = frac * 100 + '%';
+    const di = dishAt(frac);
+    if (di !== lastDish && cat.dishes[di]) {
+      lastDish = di;
+      btn.textContent = cat.dishes[di].name;
+      btn._dish = cat.dishes[di];
+    }
+  }
+
+  function tick() {
+    pos += (target - pos) * (reduce ? 1 : 0.18);
+    if (Math.abs(target - pos) < 0.02) pos = target;
+    update();
+    raf = pos === target ? 0 : requestAnimationFrame(tick);
+  }
+  const kick = () => { if (!raf) raf = requestAnimationFrame(tick); };
+  const ratio = () => (N / card.clientWidth) * speed; // frames per pixel, shared by drag and wheel
+  const move = d => { target = clamp(target + d, 0, N - 1); kick(); };
+
+  /* lazy load frames, first frame immediately */
+  function load() {
+    if (loading) return; loading = true;
+    const order = [0, ...Array.from({ length: N - 1 }, (_, k) => k + 1)];
+    let next = 0, active = 0;
+    const pump = () => {
+      while (active < 6 && next < order.length) {
+        const i = order[next++]; active++;
+        const img = new Image();
+        img.onload = img.onerror = () => { if (img.naturalWidth) { images[i] = img; loaded[i] = true; if (i === 0 || i === Math.round(pos)) update(); } active--; pump(); };
+        img.src = `/frames/${cat.id}/frame_${pad(i + 1)}.jpg?v=${cat.version}`;
+      }
+    };
+    pump();
+  }
+  new IntersectionObserver((es, ob) => { if (es[0].isIntersecting) { load(); ob.disconnect(); } }, { rootMargin: '600px' }).observe(card);
+
+  /* mouse wheel: scrub while over the card, pass through at either end */
+  card.addEventListener('wheel', e => {
+    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if ((d > 0 && target >= N - 1) || (d < 0 && target <= 0)) return; // page scrolls
+    e.preventDefault();
+    move(d * (e.deltaMode === 1 ? 16 : 1) * ratio());
+  }, { passive: false });
+
+  /* drag / swipe (horizontal only; vertical is left to the browser) */
+  card.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; dragged = 0; card.setPointerCapture(e.pointerId); });
+  card.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX; lastX = e.clientX; dragged += Math.abs(dx);
+    move(-dx * ratio());
+  });
+  const end = () => { dragging = false; };
+  card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
+
+  card.addEventListener('mouseenter', () => hovered = { move });
+  card.addEventListener('mouseleave', () => hovered = null);
+  btn.addEventListener('pointerdown', e => e.stopPropagation());
+  btn.onclick = () => { const d = btn._dish; if (!d) return; d.url ? window.open(d.url, '_blank', 'noopener') : openModal(d); };
+
+  update();
+}
+
+addEventListener('keydown', e => {
+  if (!hovered || modal.classList.contains('open')) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); hovered.move(4); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); hovered.move(-4); }
+});
+
+/* ---------- build page from the menu API ---------- */
+fetch('/api/menu').then(r => r.json()).then(menu => {
+  menu.forEach(cat => {
+    const link = document.createElement('a');
+    link.href = '#' + cat.id; link.textContent = cat.title;
+    nav.appendChild(link);
+
+    const sec = document.createElement('section');
+    sec.className = 'group'; sec.id = cat.id;
+    sec.innerHTML = `<h2 class="title">${cat.title}</h2>
+      <div class="card" tabindex="0" aria-label="${cat.title} video. Use left and right arrow keys to scrub.">
+        ${cat.count ? `<canvas></canvas><div class="hint">Scroll or swipe</div>
+        <button type="button" class="dish-btn"></button><div class="bar"><i></i></div>`
+        : `<div class="empty">No video yet. Add one in the admin page.</div>`}
+      </div>`;
+    groups.appendChild(sec);
+    if (cat.count) {
+      
+      makeScrubber(cat, sec.querySelector('.card'));
+    }
+  });
+});
+</script>
+</body>
+</html>
