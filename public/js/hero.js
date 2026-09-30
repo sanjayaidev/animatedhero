@@ -9,7 +9,7 @@
   'use strict';
 
   /* ---------- Settings ---------- */
-  const FRAME_URL = (n) => `/frames/drinks/frame_${String(n).padStart(4, '0')}.jpg`;
+  const FRAME_URL = (n) => `/frames/frame_${String(n).padStart(4, '0')}.jpg`;
   const CONCURRENCY = 6;        // how many frames download at once
   const MAX_WAIT_MS = 20000;    // safety net: unlock scroll after this long even if frames are still loading
   const FADE = 0.04;            // scroll-progress width of each text fade
@@ -192,7 +192,7 @@
   }).catch(() => { done++; });
 
   async function preload() {
-    const res = await fetch('/frames/drinks/manifest.json', { cache: 'no-cache' });
+    const res = await fetch('/frames/manifest.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error('manifest request failed');
     total = (await res.json()).count || 0;
 
