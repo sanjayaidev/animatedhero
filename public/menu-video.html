@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu (video)</title>
+<style>
+  :root { --bg:#1d1424; --panel:#2a1c34; --line:#43304f; --ink:#f6eef8; --mute:#b9a6c4; --gold:#f2b134; }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, sans-serif; }
+  header { position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 20px; background:rgba(29,20,36,.92); backdrop-filter:blur(6px); border-bottom:1px solid var(--line); }
+  header nav { display:flex; gap:14px; overflow-x:auto; }
+  header a { color:var(--mute); text-decoration:none; white-space:nowrap; }
+  header a:hover, header a:focus-visible { color:var(--gold); outline:none; }
+  #order { color:var(--gold); white-space:nowrap; }
+  #speedbox { display:flex; align-items:center; gap:8px; color:var(--mute); font-size:14px; white-space:nowrap; }
+  #speedbox input { width:110px; accent-color:var(--gold); }
+  #speedbox b { color:var(--ink); min-width:2.2em; }
+  #groups { display:grid; grid-template-columns:1fr; max-width:1100px; margin:0 auto; padding:0 16px; }
+  section.group { padding:6vh 0; scroll-margin-top:56px; }
+  /* PC: two groups side by side, with blank gaps and margins that scroll the page */
+  @media (min-width:900px){ #groups { grid-template-columns:1fr 1fr; column-gap:8vw; padding:0 32px; } }
+  h2.title { text-align:center; margin:0 0 20px; font-size:clamp(28px, 5vw, 44px); letter-spacing:-.01em; }
+
+  /* Card is narrower than the screen: the blank margins scroll the page */
+  .card { position:relative; height:min(78vh, 900px); aspect-ratio:9/16; width:auto; max-width:86%; margin:0 auto; background:#000; border-radius:16px; overflow:hidden; touch-action:pan-y; cursor:ew-resize; user-select:none; -webkit-user-select:none; }
+  canvas { width:100%; height:100%; display:block; }
+  .empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--mute); text-align:center; padding:20px; }
+
+  .dish-btn { position:absolute; left:50%; bottom:22px; transform:translateX(-50%); max-width:86%; background:var(--gold); color:#2a1c00; border:0; border-radius:999px; padding:11px 22px; font:600 17px/1.2 system-ui, sans-serif; cursor:pointer; box-shadow:0 6px 24px rgba(0,0,0,.45); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dish-btn:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+  .hint { position:absolute; top:12px; right:14px; font-size:13px; color:#fff; background:rgba(0,0,0,.45); padding:3px 10px; border-radius:999px; pointer-events:none; }
+  .bar { position:absolute; left:0; right:0; bottom:0; height:5px; background:rgba(255,255,255,.18); }
+  .bar i { display:block; height:100%; width:0; background:var(--gold); }
+
+  #modal { position:fixed; inset:0; z-index:20; display:none; place-items:center; background:rgba(10,5,15,.7); padding:20px; }
+  #modal.open { display:grid; }
+  .sheet { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:24px; width:min(420px, 100%); animation:pop .18s ease-out; }
+  @keyframes pop { from { transform:translateY(12px); opacity:0; } }
+  .sheet h3 { margin:0 0 4px; font-size:26px; }
+  .sheet .price { color:var(--gold); font-weight:600; margin-bottom:10px; }
+  .sheet p { color:var(--mute); margin:0 0 18px; }
+  .sheet .actions { display:flex; gap:10px; }
+  .sheet button { flex:1; padding:11px; border-radius:10px; font:600 16px system-ui; cursor:pointer; border:1px solid var(--line); background:transparent; color:var(--ink); }
+  .sheet button.primary { background:var(--gold); color:#2a1c00; border:0; }
+  @media (prefers-reduced-motion:reduce){ html { scroll-behavior:auto; } .sheet { animation:none; } }
+  .poster { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none; }
+  canvas { position:absolute; inset:0; opacity:0; }
+  canvas.on { opacity:1; }
+</style>
+</head>
+<body>
+<header>
+  <nav id="nav" aria-label="Menu groups"></nav>
+  <label id="speedbox">Speed <input id="speed" type="range" min="1" max="10" step="1" value="2"> <b id="speedval">2</b></label>
+  <div id="order" aria-live="polite">Order: 0</div>
+</header>
+<main id="groups"></main>
+
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <h3 id="m-name"></h3>
+    <div class="price" id="m-price"></div>
+    <p id="m-desc"></p>
+    <div class="actions">
+      <button id="m-close" type="button">Close</button>
+      <button id="m-add" type="button" class="primary">Add to order</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MAX_LIVE = 4;                 // at most 4 <video> elements hold a file at once
+const live = new Set();
+let hovered = null, orderCount = 0, currentDish = null;
+const SPEED_MULT = 0.01;
+let speedUI = 2;
+try { const v = parseInt(localStorage.getItem('scrubSpeedUI'), 10); if (v >= 1 && v <= 10) speedUI = v; } catch (e) {}
+let speed = speedUI * SPEED_MULT;
+const $id = id => document.getElementById(id);
+const speedInput = $id('speed'), speedVal = $id('speedval');
+speedInput.value = speedUI; speedVal.textContent = speedUI;
+speedInput.addEventListener('input', () => {
+  speedUI = parseInt(speedInput.value, 10); speed = speedUI * SPEED_MULT; speedVal.textContent = speedUI;
+  try { localStorage.setItem('scrubSpeedUI', speedUI); } catch (e) {}
+});
+
+/* ---------- details modal ---------- */
+const modal = $id('modal'), m_name = $id('m-name'), m_price = $id('m-price'), m_desc = $id('m-desc'),
+      m_close = $id('m-close'), m_add = $id('m-add'), nav = $id('nav'), groups = $id('groups'), orderEl = $id('order');
+function openModal(d) {
+  currentDish = d; m_name.textContent = d.name; m_price.textContent = d.price;
+  m_desc.textContent = d.description || 'No description yet.';
+  modal.classList.add('open'); m_add.focus();
+}
+const closeModal = () => modal.classList.remove('open');
+m_close.onclick = closeModal;
+modal.onclick = e => { if (e.target === modal) closeModal(); };
+addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+m_add.onclick = () => { orderCount++; orderEl.textContent = 'Order: ' + orderCount; closeModal(); };
+
+/* ---------- free the video farthest from the screen centre when over budget ---------- */
+function evict() {
+  if (live.size < MAX_LIVE) return;
+  const mid = innerHeight / 2; let far = null, fd = -1;
+  live.forEach(c => { const r = c.card.getBoundingClientRect(), d = Math.abs((r.top + r.bottom) / 2 - mid); if (d > fd) { fd = d; far = c; } });
+  if (far) far.release();
+}
+
+/* ---------- one scrubbable video card: poster -> video drawn on canvas ---------- */
+function makeCard(cat, card) {
+  const canvas = card.querySelector('canvas'), ctx = canvas.getContext('2d');
+  const btn = card.querySelector('.dish-btn'), barFill = card.querySelector('.bar i'), hint = card.querySelector('.hint');
+  const video = document.createElement('video');
+  video.muted = true; video.playsInline = true; video.preload = 'auto'; video.setAttribute('playsinline', '');
+  const src = `/videos/${cat.id}.mp4?v=${cat.version}`;
+  let state = 'idle', ready = false, drawn = false, D = 0, pos = 0, target = 0, raf = 0, blobUrl = '', abort = null;
+  let dragging = false, lastX = 0, lastDish = -1;
+  const self = { card, release };
+
+  const dishAt = f => { let i = 0; cat.dishes.forEach((d, k) => { if (f * 100 >= d.start) i = k; }); return i; };
+
+  function draw() {
+    if (!ready || video.readyState < 2) return;
+    const r = card.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    const vw = video.videoWidth, vh = video.videoHeight, s = Math.max(w / vw, h / vh);
+    ctx.drawImage(video, (w - vw * s) / 2, (h - vh * s) / 2, vw * s, vh * s);
+    if (!drawn) { drawn = true; canvas.classList.add('on'); }
+  }
+  function seek() {                       // one seek at a time; 'seeked' catches up to the latest position
+    if (!ready || video.seeking) return;
+    if (Math.abs(video.currentTime - pos) > 0.001) video.currentTime = pos;
+  }
+  video.addEventListener('loadedmetadata', () => { D = video.duration; });
+  video.addEventListener('loadeddata', () => { ready = true; hint.textContent = 'Scroll or swipe'; seek(); if (!video.seeking) draw(); });
+  video.addEventListener('seeked', () => { draw(); if (Math.abs(video.currentTime - pos) > 0.02) seek(); });
+
+  function update() {
+    const f = D ? pos / D : 0;
+    barFill.style.width = f * 100 + '%';
+    const di = dishAt(f);
+    if (di !== lastDish && cat.dishes[di]) { lastDish = di; btn.textContent = cat.dishes[di].name; btn._dish = cat.dishes[di]; }
+    seek();
+  }
+  function tick() {
+    pos += (target - pos) * (reduce ? 1 : 0.18);
+    if (Math.abs(target - pos) < 0.005) pos = target;
+    update();
+    raf = pos === target ? 0 : requestAnimationFrame(tick);
+  }
+  const kick = () => { if (!raf) raf = requestAnimationFrame(tick); };
+  const ratio = () => (D / card.clientWidth) * speed;   // seconds per pixel, shared by drag and wheel
+  const move = d => { attach(); if (!D) return; target = clamp(target + d, 0, D - 0.04); kick(); };
+
+  /* load the whole file as a blob (fully buffered = smooth seeks), only while near the screen */
+  async function attach() {
+    if (state !== 'idle') return;
+    evict(); live.add(self); state = 'loading'; hint.textContent = 'Loading…';
+    abort = new AbortController();
+    try {
+      const r = await fetch(src, { signal: abort.signal });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const b = await r.blob();
+      if (state !== 'loading') return;
+      blobUrl = URL.createObjectURL(b); video.src = blobUrl; state = 'live';
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      video.src = src; state = 'live';    // fall back to direct streaming
+    }
+  }
+  function release() {                    // drop the file + decoder; the last drawn frame stays on the canvas
+    if (state === 'idle') return;
+    if (abort) abort.abort();
+    video.removeAttribute('src'); video.load();
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = ''; }
+    ready = false; state = 'idle'; live.delete(self); hint.textContent = 'Scroll or swipe';
+  }
+  new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? attach() : release()), { rootMargin: '50% 0px' }).observe(card);
+
+  card.addEventListener('wheel', e => {
+    attach(); if (!D) return;
+    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if ((d > 0 && target >= D - 0.04) || (d < 0 && target <= 0)) return;   // page scrolls at either end
+    e.preventDefault();
+    move(d * (e.deltaMode === 1 ? 16 : 1) * ratio());
+  }, { passive: false });
+  card.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; card.setPointerCapture(e.pointerId); attach(); });
+  card.addEventListener('pointermove', e => { if (!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; move(-dx * ratio()); });
+  const end = () => { dragging = false; };
+  card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
+  card.addEventListener('mouseenter', () => hovered = { move: d => move(d * (D / 60 || 0)) });
+  card.addEventListener('mouseleave', () => hovered = null);
+  btn.addEventListener('pointerdown', e => e.stopPropagation());
+  btn.onclick = () => { const d = btn._dish; if (!d) return; d.url ? window.open(d.url, '_blank', 'noopener') : openModal(d); };
+  update();
+}
+
+addEventListener('keydown', e => {
+  if (!hovered || modal.classList.contains('open')) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); hovered.move(4); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); hovered.move(-4); }
+});
+
+/* ---------- build page ---------- */
+fetch('/api/menu-video').then(r => r.json()).then(menu => {
+  menu.forEach(cat => {
+    const link = document.createElement('a');
+    link.href = '#' + cat.id; link.textContent = cat.title; nav.appendChild(link);
+    const sec = document.createElement('section');
+    sec.className = 'group'; sec.id = cat.id;
+    sec.innerHTML = `<h2 class="title">${cat.title}</h2>
+      <div class="card" tabindex="0" aria-label="${cat.title} video. Use left and right arrow keys to scrub.">
+        ${cat.video ? `<img class="poster" src="/videos/${cat.id}.jpg?v=${cat.version}" alt="" decoding="async"><canvas></canvas>
+        <div class="hint">Scroll or swipe</div><button type="button" class="dish-btn"></button><div class="bar"><i></i></div>`
+        : `<div class="empty">No video yet. Add one in the admin page.</div>`}
+      </div>`;
+    groups.appendChild(sec);
+    if (cat.video) makeCard(cat, sec.querySelector('.card'));
+  });
+});
+</script>
+</body>
+</html>
